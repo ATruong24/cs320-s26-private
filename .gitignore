@@ -4,3 +4,5 @@
 *.log
 *.out
 *.toc
+_build
+.DS_Store
