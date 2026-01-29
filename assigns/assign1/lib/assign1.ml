@@ -7,11 +7,11 @@ let sqrt (n : int) : int = (* CHANGE _n to n! *)
     loop 0
 
 let pow (n : int) (k : int) : int = (* CHANGE _n to n and _k to k! *)
-  let rec loop base exp = 
-    if exp = 0 then 1
-    else base * loop base (exp - 1)
+  let rec loop acc i =
+    if i <= 0 then acc
+    else loop (acc * n) (i - 1)
   in
-  loop n k
+  loop 1 k
 
 let is_ws = function
   | ' ' | '\012' | '\n' | '\r' | '\t' -> true
