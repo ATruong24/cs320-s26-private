@@ -1,9 +1,17 @@
 
-let sqrt (_n : int) : int = (* CHANGE _n to n! *)
-  assert false
+let sqrt (n : int) : int = (* CHANGE _n to n! *)
+  let rec loop k =
+    if k * k >= n then k 
+    else loop (k+1)
+  in 
+    loop 0
 
-let pow (_n : int) (_k : int) : int = (* CHANGE _n to n and _k to k! *)
-  assert false
+let pow (n : int) (k : int) : int = (* CHANGE _n to n and _k to k! *)
+  let rec loop base exp = 
+    if exp = 0 then 1
+    else base * loop base (exp - 1)
+  in
+  loop n k
 
 let is_ws = function
   | ' ' | '\012' | '\n' | '\r' | '\t' -> true
@@ -31,14 +39,61 @@ let implode_all (css : char list list) : string list =
     | cs :: rest -> loop (implode cs :: acc) rest
   in loop [] css
 
-let split_on_ws_helper (_cs : char list) : char list list =
-  assert false
+let split_on_ws_helper (cs : char list) : char list list =
+  let rec loop acc current_token chars =
+    match chars with
+    | [] -> 
+        if current_token = [] then List.rev acc
+        else List.rev (List.rev current_token :: acc)
+    | c :: rest ->
+        if is_ws c then
+          if current_token = [] then 
+            loop acc [] rest
+          else 
+            loop (List.rev current_token :: acc) [] rest
+        else
+          loop acc (c :: current_token) rest
+  in
+  loop [] [] cs
 
 let split_on_ws (s : string) : string list =
   implode_all (split_on_ws_helper (explode s))
 
-let eval (_stack : int list) (_prog : string list) : int list =
-  assert false
+let rec eval (stack : int list) (prog : string list) : int list =
+  match prog with
+  | [] -> stack 
+  | token :: rest ->
+      match token with
+      | "+" -> 
+          (match stack with 
+           | y :: x :: s -> eval ((x + y) :: s) rest
+           | _ -> failwith "Stack underflow on +")
+      | "-" -> 
+          (match stack with 
+           | y :: x :: s -> eval ((x - y) :: s) rest
+           | _ -> failwith "Stack underflow on -")
+      | "*" -> 
+          (match stack with 
+           | y :: x :: s -> eval ((x * y) :: s) rest
+           | _ -> failwith "Stack underflow on *")
+      | "/" -> 
+          (match stack with 
+           | y :: x :: s -> eval ((x / y) :: s) rest
+           | _ -> failwith "Stack underflow on /")
+      | "mod" -> 
+          (match stack with 
+           | y :: x :: s -> eval ((x mod y) :: s) rest
+           | _ -> failwith "Stack underflow on mod")
+      | "^" -> 
+          (match stack with 
+           | y :: x :: s -> eval ((pow x y) :: s) rest
+           | _ -> failwith "Stack underflow on ^")
+      | "sqrt" -> 
+          (match stack with 
+           | x :: s -> eval ((sqrt x) :: s) rest
+           | _ -> failwith "Stack underflow on sqrt")
+      | _ -> 
+          eval (int_of_string token :: stack) rest
 
 let interp (input : string) : int =
   match eval [] (split_on_ws input) with
