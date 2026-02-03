@@ -3,7 +3,7 @@
 "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
 <head>
-<!-- 2026-01-28 Wed 22:40 -->
+<!-- 2026-02-03 Tue 17:31 -->
 <meta http-equiv="Content-Type" content="text/html;charset=utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Assignment 2</title>
@@ -50,15 +50,15 @@
 <h2>Table of Contents</h2>
 <div id="text-table-of-contents" role="doc-toc">
 <ul>
-<li><a href="#orgbe037b3">1. Programming</a>
+<li><a href="#org4770f80">1. Programming</a>
 <ul>
-<li><a href="#orgdeb2dea">1.1. Infix Calculator</a></li>
+<li><a href="#org2c9496e">1.1. Infix Calculator</a></li>
 </ul>
 </li>
-<li><a href="#orgf3a8372">2. Written</a>
+<li><a href="#org819d2fb">2. Written</a>
 <ul>
-<li><a href="#orgb87b9ad">2.1. Types of Expressions</a></li>
-<li><a href="#orgf19f788">2.2. Expressions of Types</a></li>
+<li><a href="#orgffe2f6d">2.1. Types of Expressions</a></li>
+<li><a href="#org8377d8d">2.2. Expressions of Types</a></li>
 </ul>
 </li>
 </ul>
@@ -70,12 +70,12 @@ all of your programming solutions in a file called
 <code>assign1/lib/assign2.ml</code>. See the file <code>test/test_assign2.ml</code> for
 example behavior of each function.
 </p>
-<div id="outline-container-orgbe037b3" class="outline-2">
-<h2 id="orgbe037b3"><span class="section-number-2">1.</span> Programming</h2>
+<div id="outline-container-org4770f80" class="outline-2">
+<h2 id="org4770f80"><span class="section-number-2">1.</span> Programming</h2>
 <div class="outline-text-2" id="text-1">
 </div>
-<div id="outline-container-orgdeb2dea" class="outline-3">
-<h3 id="orgdeb2dea"><span class="section-number-3">1.1.</span> Infix Calculator</h3>
+<div id="outline-container-org2c9496e" class="outline-3">
+<h3 id="org2c9496e"><span class="section-number-3">1.1.</span> Infix Calculator</h3>
 <div class="outline-text-3" id="text-1-1">
 <p>
 This week's assignment is simple in specify, but pretty darn difficult
@@ -224,27 +224,27 @@ provides a basis from which you can get started.  Happy coding!
 </div>
 </div>
 </div>
-<div id="outline-container-orgf3a8372" class="outline-2">
-<h2 id="orgf3a8372"><span class="section-number-2">2.</span> Written</h2>
+<div id="outline-container-org819d2fb" class="outline-2">
+<h2 id="org819d2fb"><span class="section-number-2">2.</span> Written</h2>
 <div class="outline-text-2" id="text-2">
 </div>
-<div id="outline-container-orgb87b9ad" class="outline-3">
-<h3 id="orgb87b9ad"><span class="section-number-3">2.1.</span> Types of Expressions</h3>
+<div id="outline-container-orgffe2f6d" class="outline-3">
+<h3 id="orgffe2f6d"><span class="section-number-3">2.1.</span> Types of Expressions</h3>
 <div class="outline-text-3" id="text-2-1">
 <ol class="org-ol">
 <li><p>
 What is the type of <code>g</code> so that the following expression is
 well-typed? Can <code>g</code> be given a polymorphic type? Also, what is the
-type of the following expression?
+type of the following expression? Justify your answer.
 </p>
 <div class="org-src-container">
 <pre class="src src-ocaml"><span style="color: #000000; font-weight: bold;">let</span> <span style="color: #000000; font-weight: bold;">rec</span> <span style="color: #0000ff;">f</span> <span style="color: #a0522d;">x</span> = g x + g (f x) <span style="color: #000000; font-weight: bold;">in</span> f
 </pre>
 </div></li>
 <li><p>
-Suppose that <code>h</code> is of type <code>list 'a -&gt; list 'a -&gt; 'a</code> and <code>k</code> is
+Suppose that <code>h</code> is of type <code>'a list-&gt; 'a list -&gt; 'a</code> and <code>k</code> is
 of type <code>'b -&gt; ('b -&gt; 'b) list</code>. Determine the type of the
-following expression.
+following expression.  Justify your answer.
 </p>
 <div class="org-src-container">
 <pre class="src src-ocaml"><span style="color: #a020f0;">fun</span> <span style="color: #a0522d;">x</span> <span style="color: #a0522d;">y</span> -&gt; h x (k y)
@@ -253,8 +253,8 @@ following expression.
 </ol>
 </div>
 </div>
-<div id="outline-container-orgf19f788" class="outline-3">
-<h3 id="orgf19f788"><span class="section-number-3">2.2.</span> Expressions of Types</h3>
+<div id="outline-container-org8377d8d" class="outline-3">
+<h3 id="org8377d8d"><span class="section-number-3">2.2.</span> Expressions of Types</h3>
 <div class="outline-text-3" id="text-2-2">
 <p>
 For each of the following types, determine an OCaml expression using
