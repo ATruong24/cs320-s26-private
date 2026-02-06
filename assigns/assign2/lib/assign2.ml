@@ -35,7 +35,40 @@ let lex s =
         else assert false
   in go [] 0
 
-let eval _e = assert false (* TODO *)
+let rec drop_last l =
+  match l with
+  | x:: y :: rest -> x :: drop_last (y :: rest)
+  | _ -> []
+
+let splitRightmost ops expr = 
+  let rec loop l depth rightSide =
+    match l with
+    | [] -> []
+    | ")" :: rest -> loop rest (depth + 1) (")" :: rightSide)
+    | "(" :: rest -> loop rest (depth - 1) ("(" :: rightSide)
+    | op :: rest when depth = 0 && (List.mem op ops) ->
+        [(List.rev rest, op, rightSide)]
+    | x :: rest -> loop rest depth (x :: rightSide)
+  in 
+  loop (List.rev expr) 0 []
+
+let rec eval expr =
+  match splitRightmost ["+"; "-"] expr with
+  | [(lhs, "+", rhs)] -> (eval lhs) + (eval_mul_div rhs)
+  | [(lhs, "-", rhs)] -> (eval lhs) - (eval_mul_div rhs)
+  | _ -> eval_mul_div expr
+
+and eval_mul_div expr =
+  match splitRightmost ["*"; "/"] expr with
+  | [(lhs, "*", rhs)] -> (eval_mul_div lhs) * (eval_num_paren rhs)
+  | [(lhs, "/", rhs)] -> (eval_mul_div lhs) / (eval_num_paren rhs)
+  | _ -> eval_num_paren expr
+
+and eval_num_paren expr =
+  match expr with
+  | [n] -> int_of_string n
+  | "(" :: rest -> eval (drop_last rest)
+  | _ -> assert false
 
 let interp (input : string) : int =
   match eval (lex input) with
