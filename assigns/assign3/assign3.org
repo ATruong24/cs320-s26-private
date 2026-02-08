@@ -11,7 +11,7 @@ neat (or typed) and the final answer in your solution to each problem
 must be abundantly clear, e.g., surrounded in a box.  Also make sure
 to cite your sources per the instructions in the course manual.
 
-* Programming
+* Programming (%40)
 
 This week you'll be building (surprise) a calculator.  Or rather,
 you'll be extending the calculator from the previous assignment so
@@ -120,7 +120,7 @@ resulting list.
   let _ = assert (List.assoc "X" (insert_uniq "X" 7 l) = 7)
 #+end_src
 
-* Written
+* Written (60%)
 For all derivations, make sure that you label every rule instantiation
 with a rule name, and that you do /not/ include side-conditions.  The
 rules you should use for your derivations are included in the notes
