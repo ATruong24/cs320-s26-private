@@ -85,17 +85,48 @@ type expr =
   | Bop of op * expr * expr
   | If of expr * expr * expr
 
-let expr_of_sexpr_opt (_ : sexpr) : expr option =
-  assert false (* TODO *)
+let rec expr_of_sexpr_opt (s : sexpr) : expr option =
+  match s with
+  | Atom n -> (
+    match int_of_string_opt n with
+      | Some i -> Some (Int i)
+      | None -> None
+  )
+  | List [Atom "+"; e1; e2] -> (
+    match expr_of_sexpr_opt e1, expr_of_sexpr_opt e2 with
+      | Some expr1, Some expr2 -> Some (Bop (Add, expr1, expr2))
+      | _ -> None
+  )
+  | List [Atom "*"; e1; e2] -> (
+    match expr_of_sexpr_opt e1, expr_of_sexpr_opt e2 with
+    | Some expr1, Some expr2 -> Some (Bop (Mul, expr1, expr2))
+    | _ -> None
+  )
+| List [Atom "="; e1; e2] -> (
+    match expr_of_sexpr_opt e1, expr_of_sexpr_opt e2 with
+    | Some expr1, Some expr2 -> Some (Bop (Eq, expr1, expr2))
+    | _ -> None
+  )
+  | List [Atom "if"; e1; e2; e3] -> (
+    match expr_of_sexpr_opt e1, expr_of_sexpr_opt e2, expr_of_sexpr_opt e3 with
+    | Some expr1, Some expr2, Some expr3 -> Some (If (expr1, expr2, expr3))
+    | _ -> None
+  )
+| _ -> None
 
-let expr_of_string_opt (_ : string) : expr option =
-  assert false (* TODO *)
+let expr_of_string_opt (s : string) : expr option =
+  match sexpr_of_string_opt s with
+  | Some sexpr -> expr_of_sexpr_opt sexpr
+  | None -> None
 
-let sexpr_of_expr (_ : expr) : sexpr =
-  assert false (* TODO *)
+let rec sexpr_of_expr (e : expr) : sexpr =
+  match e with
+  | Int n -> Atom (string_of_int n)
+  | Bop (op, e1, e2) -> List[Atom(string_of_op op); sexpr_of_expr e1; sexpr_of_expr e2]
+  | If (e1, e2, e3) -> List[Atom "if"; sexpr_of_expr e1; sexpr_of_expr e2; sexpr_of_expr e3]
 
-let string_of_expr (_ : expr) : string =
-  assert false (* TODO *)
+let string_of_expr (e : expr) : string =
+  string_of_sexpr (sexpr_of_expr e)
 
 type ty = BoolT | IntT
 
@@ -159,11 +190,29 @@ type ty_deriv =
     }
   | Hole
 
-let ty_deriv_of_sexpr_opt (_ : sexpr) : ty_deriv option =
-  assert false (* TODO *)
+let rec ty_deriv_of_sexpr_opt (s : sexpr) : ty_deriv option =
+  let rec get_prems = function
+  | [] -> Some[]
+  | h :: t -> (
+    match ty_deriv_of_sexpr_opt h, get_prems t with
+    | Some d, Some ds -> Some (d :: ds)
+    | _ -> None
+  )
+  in
+  match s with
+  | Atom "???" -> Some Hole
+  | List (e_s :: ty_s :: rn_s :: prems_s) -> (
+    match expr_of_sexpr_opt e_s, ty_of_sexpr_opt ty_s, ty_rule_of_sexpr_opt rn_s, get_prems prems_s with
+    | Some expr, Some ty, Some rname, Some prem_derivs ->
+      Some (Rule_app {prem_derivs; concl = {expr; ty}; rname})
+    | _ -> None
+  )
+| _ -> None
 
-let ty_deriv_of_string_opt (_ : string) : ty_deriv option =
-  assert false (* TODO *)
+let ty_deriv_of_string_opt (s : string) : ty_deriv option =
+  match sexpr_of_string_opt s with
+  | Some sexpr -> ty_deriv_of_sexpr_opt sexpr
+  | None -> None
 
 let string_of_ty_deriv (d : ty_deriv) : string =
   let rec go d =
@@ -220,16 +269,47 @@ let string_of_ty_deriv (d : ty_deriv) : string =
   in
   String.concat "\n" lines
 
-let check_rule (_ : ty_rule) (_ : ty_jmt option list) (_ : ty_jmt) : bool =
-  assert false (* TODO *)
+let check_rule (r : ty_rule) (prems : ty_jmt option list) (concl : ty_jmt) : bool =
+  let works p expected_e expected_t =
+    match p with
+    | None -> true
+    | Some j -> j.expr = expected_e && j.ty = expected_t
+  in
+
+  match r, prems, concl.expr, concl.ty with
+  | Int_lit, [], Int _, IntT -> true
+  | Add_int, [p1; p2], Bop (Add, e1, e2), IntT -> 
+    works p1 e1 IntT && works p2 e2 IntT
+  | Mul_int, [p1; p2], Bop (Mul, e1, e2), IntT -> 
+    works p1 e1 IntT && works p2 e2 IntT
+  | Eq_rule, [p1; p2], Bop (Eq, e1, e2), BoolT -> 
+    (works p1 e1 IntT && works p2 e2 IntT) ||
+    (works p1 e1 BoolT && works p2 e2 BoolT)
+  | If_rule, [p1; p2; p3], If (e1, e2, e3), t -> 
+    works p1 e1 BoolT && works p2 e2 t && works p3 e3 t
+  | _ -> false
 
 type status =
   | Complete
   | Invalid
   | Partial
 
-let check_deriv (_ : ty_deriv) : status =
-  assert false (* TODO *)
+let rec check_deriv (d : ty_deriv) : status =
+  match d with
+  | Hole -> Partial
+  | Rule_app { prem_derivs; concl; rname } ->
+      let get_concl = function
+        | Hole -> None
+        | Rule_app r -> Some r.concl
+      in
+      let prem_jmts = List.map get_concl prem_derivs in
+      
+      if not (check_rule rname prem_jmts concl) then Invalid
+      else
+        let statuses = List.map check_deriv prem_derivs in
+        if List.mem Invalid statuses then Invalid
+        else if List.mem Partial statuses then Partial
+        else Complete
 
 type value = BoolV of bool | IntV of int
 
@@ -238,8 +318,31 @@ let string_of_value (v : value) : string =
   | BoolV b -> string_of_bool b
   | IntV n -> string_of_int n
 
-let value_of_expr (_ : expr) : value =
-  assert false (* TODO *)
+let rec value_of_expr (e : expr) : value =
+  match e with
+  | Int n -> IntV n
+  | Bop (Add, e1, e2) -> (
+      match value_of_expr e1, value_of_expr e2 with
+      | IntV v1, IntV v2 -> IntV (v1 + v2)
+      | _ -> failwith "Not Possible"
+    )
+  | Bop (Mul, e1, e2) -> (
+      match value_of_expr e1, value_of_expr e2 with
+      | IntV v1, IntV v2 -> IntV (v1 * v2)
+      | _ -> failwith "Not Possible"
+    )
+  | Bop (Eq, e1, e2) -> (
+    match value_of_expr e1, value_of_expr e2 with
+    | IntV v1, IntV v2 -> BoolV (v1 = v2)
+    | BoolV v1, BoolV v2 -> BoolV (v1 = v2)
+    | _ -> failwith "Not Possible"
+  )
+| If (e1, e2, e3) -> (
+    match value_of_expr e1 with
+    | BoolV true -> value_of_expr e2
+    | BoolV false -> value_of_expr e3
+    | _ -> failwith "Not Possible"
+  )
 
 type error = Parse_error | Invalid_deriv of ty_deriv
 
@@ -257,4 +360,24 @@ let interp (s : string) : (ty_deriv * value option, error) result  =
   )
   | None -> Error Parse_error
 
-let example_deriv : string = "" (* TODO *)
+let example_deriv : string = 
+"
+((if (= (= 5 (+ 1 4)) (= 0 1)) (+ 2 3) (* (+ 4 5) 67)) int IF
+  ((= (= 5 (+ 1 4)) (= 0 1)) bool EQ
+    ((= 5 (+ 1 4)) bool EQ
+      (5 int INTLIT)
+      ((+ 1 4) int ADDINT
+        (1 int INTLIT)
+        (4 int INTLIT)))
+    ((= 0 1) bool EQ
+      (0 int INTLIT)
+      (1 int INTLIT)))
+  ((+ 2 3) int ADDINT
+    (2 int INTLIT)
+    (3 int INTLIT))
+  ((* (+ 4 5) 67) int MULINT
+    ((+ 4 5) int ADDINT
+      (4 int INTLIT)
+      (5 int INTLIT))
+    (67 int INTLIT)))
+"
