@@ -1,4 +1,6 @@
-
+%token LPAREN
+%token RPAREN
+%token<string> ATOM
 %token EOF
 
 %start<Ast.sexpr> prog
@@ -6,4 +8,4 @@
 %%
 
 prog:
-  | EOF { assert false }
+  | EOF { e }
