@@ -82,7 +82,7 @@ let rec type_of (ctxt : ctxt) (e : expr) : ty option =
        | None -> None
       )
   | LetRec { name; arg; arg_ty; out_ty; binding; body } ->
-      let fun_ty = Fun (arg_ty, out_ty) in
+      let fun_ty : ty = Fun (arg_ty, out_ty) in
       let inner_ctxt = Env.add arg arg_ty (Env.add name fun_ty ctxt) in
       let outer_ctxt = Env.add name fun_ty ctxt in
       if type_of inner_ctxt binding = Some out_ty then
@@ -116,33 +116,26 @@ let rec eval (env : dyn_env) (e : expr) : value =
   | Unit -> Unit
   | Bool b -> Bool b
   | Int n -> Int n
-  
   | Var x -> Env.find x env
-  
   | Negate e1 ->
       (match eval env e1 with
        | Int n -> Int (-n)
-       | _ -> assert false)
-       
+       | _ -> assert false)       
   | Assert e1 ->
       (match eval env e1 with
        | Bool true -> Unit
        | Bool false -> raise Assert_fail
-       | _ -> assert false)
-       
+       | _ -> assert false)     
   | If (e1, e2, e3) ->
       (match eval env e1 with
        | Bool true -> eval env e2
        | Bool false -> eval env e3
-       | _ -> assert false)
-       
+       | _ -> assert false) 
   | Let (x, e1, e2) ->
       let v1 = eval env e1 in
       eval (Env.add x v1 env) e2
-
   | Fun (_, _, _) as f ->
       Clos (env, None, f)
-
   | App (e1, e2) ->
     let clos_val = eval env e1 in
     let arg_val = eval env e2 in
@@ -151,12 +144,14 @@ let rec eval (env : dyn_env) (e : expr) : value =
         let env_witharg = Env.add param arg_val clos_env in
         let final_env =
           match name_opt with
-          | Some f_name -> Env.add f_name clos_val env_with_arg
-          | None -> env_with_arg
+          | Some f_name -> Env.add f_name clos_val env_witharg
+          | None -> env_witharg
         in
         eval final_env body_expr
        | _ -> assert false)
-  
+  | LetRec { name; binding; body; _ } ->
+    let closure_val = Clos (env, Some name, binding) in
+      eval (Env.add name closure_val env) body
   | Bop (op, e1, e2) ->
       ( match op with
         | And ->
