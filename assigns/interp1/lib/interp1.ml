@@ -149,8 +149,9 @@ let rec eval (env : dyn_env) (e : expr) : value =
         in
         eval final_env body_expr
        | _ -> assert false)
-  | LetRec { name; binding; body; _ } ->
-    let closure_val = Clos (env, Some name, binding) in
+  | LetRec { name; arg; arg_ty; binding; body; _ } ->
+    let recursive_fun = Fun (arg, arg_ty, binding) in
+    let closure_val = Clos (env, Some name, recursive_fun) in
       eval (Env.add name closure_val env) body
   | Bop (op, e1, e2) ->
       ( match op with
