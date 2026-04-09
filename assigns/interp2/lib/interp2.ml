@@ -192,8 +192,9 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
   | Bop (op, e1, e2) ->
     (match op, type_of_expr ctxt e1, type_of_expr ctxt e2 with
     | (Add | Sub | Mul | Div | Mod), Ok TInt, Ok TInt -> Ok TInt
-    | (Eq | Neq | Lt | Lte | Gt | Gte), Ok TInt, Ok TInt -> Ok TBool
+    | (Eq | Neq | Lt | Lte | Gt | Gte), Ok t1, Ok t2 when t1 = t2 -> Ok TBool
     | (And | Or), Ok TBool, Ok TBool -> Ok TBool
+    | Cons, Ok TInt, Ok TInt_list -> Ok TInt_list
     | _ -> assert false)
   | Fun (args, body) ->
     let rec check_fun remaining_args ctxt =
@@ -217,7 +218,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
           | Ok t2_arg when t1 = t2_arg -> check_args t2 rest_args
           | Ok t2_arg -> Error (exp_ty e2.pos t2_arg t1)
           | Error err -> Error err)
-        | TFun (_, t2), [] -> Ok t2
+        | current_ty, [] -> Ok current_ty
         | _, _ -> Error (too_many_args e1.pos ty)
       in check_args ty e2s
     | Error err -> Error err)
