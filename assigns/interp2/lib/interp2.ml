@@ -335,13 +335,31 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
     | _ -> assert false)
     )
   | Let {is_rec; name; args; binding; body; _ } ->
-    let v = 
-      if args = [] && not is_rec then
-        eval_expr env binding
-      else
-        VClos {env=env; name=Some name; args=List.map fst args; body=binding}
-    in
-    eval_expr (Env.add name v env) body
+    let v =
+        if args <> [] then 
+          VClos { env; name = (if is_rec then Some name else None); args = List.map fst args; body = binding }
+        else match eval_expr env binding with
+          | VClos c when is_rec -> VClos { c with name = Some name } 
+          | other_val -> other_val
+      in 
+      eval_expr (Env.add name v env) body
+  | Fun (args, body) ->
+      VClos {env=env; name=None; args=List.map fst args; body}
+  | App (e1, args) ->
+    let rec apply current_val arg_vals =
+        match current_val, arg_vals with
+        | result, [] -> result
+        | VClos c, v :: vs ->
+            (match c.args with
+             | p :: ps ->
+                 let env_with_self = match c.name with Some f -> Env.add f current_val c.env | None -> c.env in
+                 let final_env = Env.add p v env_with_self in
+                 if ps = [] then apply (eval_expr final_env c.body) vs
+                 else apply (VClos { c with env = final_env; args = ps }) vs 
+             | [] -> assert false)
+        | _ -> assert false
+      in 
+      apply (eval_expr env e1) (List.map (eval_expr env) args)
   | _ -> assert false
 
 
