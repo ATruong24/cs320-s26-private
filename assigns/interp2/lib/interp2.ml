@@ -176,22 +176,25 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
   | Var x -> 
     (match Env.find_opt x ctxt with
     | Some ty -> Ok ty
-    | None -> assert false)
+    | None -> Error (unknown_var e.pos x))
 
   | Negate e1 ->
     (match type_of_expr ctxt e1 with
     | Ok TInt -> Ok TInt
-    | _ -> assert false)
+    | Ok t -> Error (exp_ty e1.pos t TInt)
+    | Error err -> Error err)
 
   | If (e1, e2, e3) ->
     (match type_of_expr ctxt e1, type_of_expr ctxt e2, type_of_expr ctxt e3 with
     | Ok TBool, Ok t2, Ok t3 when t2 = t3 -> Ok t2
-    | _ -> assert false)
+    | Ok t -> Error (exp_ty e1.pos t TBool)
+    | Error err -> Error err)
 
   | Assert e1 ->
     (match type_of_expr ctxt e1 with
     | Ok TBool -> Ok TUnit
-    | _ -> assert false)
+    | Ok t -> Error (exp_ty e1.pos t TBool)
+    | Error err -> Error err)
 
   | Bop (op, e1, e2) ->
     (match op, type_of_expr ctxt e1, type_of_expr ctxt e2 with
@@ -199,7 +202,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
     | (Eq | Neq | Lt | Lte | Gt | Gte), Ok t1, Ok t2 when t1 = t2 -> Ok TBool
     | (And | Or), Ok TBool, Ok TBool -> Ok TBool
     | Cons, Ok TInt, Ok TInt_list -> Ok TInt_list
-    | _ -> assert false)
+    | Error err -> Error err)
 
   | Fun (args, body) ->
     let rec check_fun remaining_args ctxt =
@@ -451,7 +454,7 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
                  let env_with_self = match c.name with Some f -> Env.add f current_val c.env | None -> c.env in
                  let final_env = Env.add p v env_with_self in
                  if ps = [] then apply (eval_expr final_env c.body) vs
-                 else apply (VClos { c with env = final_env; args = ps }) vs 
+                 else apply (VClos { c with env = final_env; args = ps; name = None}) vs 
              | [] -> assert false)
         | _ -> assert false
       in 
