@@ -481,9 +481,10 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
     | Eq, _, _ -> VBool (v1 = v2)
     | Neq, _, _ -> VBool (v1 <> v2)
     | Lt, _, _ -> VBool (v1 < v2)
-    | Lte, _, _ -> VBool (v1 < v2)
+    | Lte, _, _ -> VBool (v1 <= v2)
     | Gt, _, _ -> VBool (v1 > v2)
     | Gte, _, _  -> VBool (v1 >= v2 )
+    | Cons, VInt n, VInt_list ns -> VInt_list (n :: ns)
     | _ -> assert false)
     )
 
