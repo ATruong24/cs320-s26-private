@@ -185,8 +185,13 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
     | Error err -> Error err)
 
   | If (e1, e2, e3) ->
-    (match type_of_expr ctxt e1, type_of_expr ctxt e2, type_of_expr ctxt e3 with
-    | Ok TBool, Ok t2, Ok t3 when t2 = t3 -> Ok t2
+    (match type_of_expr ctxt e1 with 
+    | Ok TBool ->
+       (match type_of_expr ctxt e2, type_of_expr ctxt e3 with
+      | Ok t2, Ok t3 ->
+          if t2 = t3 then Ok t2
+          else Error (exp_ty e3.pos t3 t2)
+      | Error err, _ | _, Error err -> Error err)
     | Ok t -> Error (exp_ty e1.pos t TBool)
     | Error err -> Error err)
 
@@ -197,13 +202,44 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
     | Error err -> Error err)
 
   | Bop (op, e1, e2) ->
-    (match op, type_of_expr ctxt e1, type_of_expr ctxt e2 with
-    | (Add | Sub | Mul | Div | Mod), Ok TInt, Ok TInt -> Ok TInt
-    | (Eq | Neq | Lt | Lte | Gt | Gte), Ok t1, Ok t2 when t1 = t2 -> Ok TBool
-    | (And | Or), Ok TBool, Ok TBool -> Ok TBool
-    | Cons, Ok TInt, Ok TInt_list -> Ok TInt_list
-    | Error err -> Error err)
+    (match op with
+    | (Add | Sub | Mul | Div | Mod) ->
+        (match type_of_expr ctxt e1 with
+          | Ok TInt ->
+            (match type_of_expr ctxt e2 with
+              | Ok TInt -> Ok TInt
+              | Ok t -> Error (exp_ty e2.pos t TInt)
+              | Error err -> Error err)
+          | Ok t -> Error (exp_ty e1.pos t TInt)
+          | Error err -> Error err)
+      
+    | (Eq | Neq | Lt | Lte | Gt | Gte) ->
+      (match type_of_expr ctxt e1, type_of_expr ctxt e2 with
+      | Ok t1, Ok t2 ->
+          if t1 = t2 then Ok TBool
+          else Error (exp_ty e2.pos t2 t1)
+      | Error err, _ | _, Error err -> Error err)
 
+    | (And | Or) ->
+      (match type_of_expr ctxt e1 with
+      | Ok TBool ->
+          (match type_of_expr ctxt e2 with
+            | Ok TBool -> Ok TBool
+            | Ok t -> Error (exp_ty e2.pos t TBool)
+            | Error err -> Error err)
+      | Ok t -> Error (exp_ty e1.pos t TBool)
+      | Error err -> Error err)
+
+    | Cons ->
+      (match type_of_expr ctxt e1 with
+      | Ok TInt ->
+          (match type_of_expr ctxt e2 with
+          | Ok TInt_list -> Ok TInt_list
+          | Ok t -> Error (exp_ty e2.pos t TInt_list)
+          | Error err -> Error err)
+      | Ok t -> Error (exp_ty e1.pos t TInt)
+      | Error err -> Error err))
+  
   | Fun (args, body) ->
     let rec check_fun remaining_args ctxt =
       match remaining_args with
@@ -220,32 +256,52 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
   | App (e1, e2s) ->
     (match type_of_expr ctxt e1 with
     | Ok ty ->
-      let rec check_args ty remaining_args =
-        match ty, remaining_args with
-        | TFun (t1, t2), e2 :: rest_args ->
-          (match type_of_expr ctxt e2 with
-          | Ok t2_arg when t1 = t2_arg -> check_args t2 rest_args
-          | Ok t2_arg -> Error (exp_ty e2.pos t2_arg t1)
-          | Error err -> Error err)
-        | current_ty, [] -> Ok current_ty
-        | _, _ -> Error (too_many_args e1.pos ty)
-      in check_args ty e2s
+        let rec check_args current_ty remaining_args =
+          match current_ty, remaining_args with
+          | _, [] -> Ok current_ty
+          | TFun (t1, t2), e2 :: rest_args ->
+              (match type_of_expr ctxt e2 with
+              | Ok t2_arg ->
+                  if t1 = t2_arg then check_args t2 rest_args
+                  else Error (exp_ty e2.pos t2_arg t1)
+              | Error err -> Error err)
+          | _, _ :: _ -> Error (too_many_args e1.pos ty)
+        in 
+        (match ty, e2s with
+        | TFun _, _ -> check_args ty e2s
+        | _, [] -> Ok ty
+        | _, _ -> Error (not_func e1.pos ty))
     | Error err -> Error err)
 
   | Let {is_rec; name; args; annot; binding; body; _ } ->
       let ctxr_args = List.fold_left (fun c (x, t) -> Env.add x t c) ctxt args in
       let fun_ty ret = List.fold_right (fun (_, t) acc -> TFun (t, acc)) args ret in
-      let ctxr =
-        if is_rec then
-          match annot with
-          | Some t -> Env.add name (fun_ty t) ctxr_args
-          | None -> assert false
-        else
-          ctxr_args
-      in
-      (match type_of_expr ctxr binding with 
-       | Ok binding_ty -> type_of_expr (Env.add name (fun_ty binding_ty) ctxt) body
-       | _ -> assert false)
+      
+      if is_rec then
+        match annot with
+        | None -> Error (missing_rec_annot e.pos)
+        | Some ret_t ->
+          if args = [] then Error (missing_rec_arg e.pos)
+            else
+              let full_t = fun_ty ret_t in
+              let ctxr = Env.add name full_t ctxr_args in
+              (match type_of_expr ctxr binding with
+                | Ok binding_ret_t ->
+                    if binding_ret_t = ret_t then
+                        type_of_expr (Env.add name full_t ctxt) body
+                    else Error (exp_ty binding.pos binding_ret_t ret_t)
+                | Error err -> Error err)
+      else
+        (match type_of_expr ctxr_args binding with
+           | Ok binding_ret_t ->
+              let full_t = fun_ty binding_ret_t in
+              (match annot with
+              | Some expected_ret_t ->
+                  if binding_ret_t = expected_ret_t then
+                    type_of_expr (Env.add name full_t ctxt) body
+                  else Error (exp_ty binding.pos binding_ret_t expected_ret_t)
+              | None -> type_of_expr (Env.add name full_t ctxt) body)
+           | Error err -> Error err)
 
   | Nil -> Ok TInt_list
 
