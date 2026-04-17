@@ -177,18 +177,22 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
     (match Env.find_opt x ctxt with
     | Some ty -> Ok ty
     | None -> assert false)
+
   | Negate e1 ->
     (match type_of_expr ctxt e1 with
     | Ok TInt -> Ok TInt
     | _ -> assert false)
+
   | If (e1, e2, e3) ->
     (match type_of_expr ctxt e1, type_of_expr ctxt e2, type_of_expr ctxt e3 with
     | Ok TBool, Ok t2, Ok t3 when t2 = t3 -> Ok t2
     | _ -> assert false)
+
   | Assert e1 ->
     (match type_of_expr ctxt e1 with
     | Ok TBool -> Ok TUnit
     | _ -> assert false)
+
   | Bop (op, e1, e2) ->
     (match op, type_of_expr ctxt e1, type_of_expr ctxt e2 with
     | (Add | Sub | Mul | Div | Mod), Ok TInt, Ok TInt -> Ok TInt
@@ -196,6 +200,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
     | (And | Or), Ok TBool, Ok TBool -> Ok TBool
     | Cons, Ok TInt, Ok TInt_list -> Ok TInt_list
     | _ -> assert false)
+
   | Fun (args, body) ->
     let rec check_fun remaining_args ctxt =
       match remaining_args with
@@ -208,6 +213,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
         | Error err -> Error err)
     in 
     check_fun args ctxt
+
   | App (e1, e2s) ->
     (match type_of_expr ctxt e1 with
     | Ok ty ->
@@ -222,6 +228,7 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
         | _, _ -> Error (too_many_args e1.pos ty)
       in check_args ty e2s
     | Error err -> Error err)
+
   | Let {is_rec; name; args; annot; binding; body; _ } ->
       let ctxr_args = List.fold_left (fun c (x, t) -> Env.add x t c) ctxt args in
       let fun_ty ret = List.fold_right (fun (_, t) acc -> TFun (t, acc)) args ret in
@@ -236,7 +243,88 @@ let rec type_of_expr (ctxt : ctxt) (e : expr) : (ty, Error_msg.t) result =
       (match type_of_expr ctxr binding with 
        | Ok binding_ty -> type_of_expr (Env.add name (fun_ty binding_ty) ctxt) body
        | _ -> assert false)
-  | _ -> assert false
+
+  | Nil -> Ok TInt_list
+
+  | Tuple es ->
+    let rec check_tuple es_list acc =
+      match es_list with
+      | [] -> Ok (TTuple (List.rev acc))
+      | e_i :: rest ->
+          (match type_of_expr ctxt e_i with
+            | Ok t -> check_tuple rest (t :: acc)
+            | Error err -> Error err)
+    in check_tuple es []
+
+  | Match (e1, cases) ->
+    (match type_of_expr ctxt e1 with
+    | Ok t1 ->
+      let rec check_pat p t =
+        match p.pattern with
+        | PUnit -> if t = TUnit then Ok Env.empty else Error (exp_pat p.pos TUnit t)
+        | PBool _ -> if t = TBool then Ok Env.empty else Error (exp_pat p.pos TBool t)
+        | PInt _ -> if t = TInt then Ok Env.empty else Error (exp_pat p.pos TInt t)
+        | PVar "_" -> Ok Env.empty
+        | PVar x -> Ok (Env.singleton x t)
+        | PNil -> if t = TInt_list then Ok Env.empty else Error (exp_pat p.pos TInt_list t)
+
+        | PCons (p1, p2) ->
+                 if t = TInt_list then
+                   (match check_pat p1 TInt, check_pat p2 TInt_list with
+                    | Ok env1, Ok env2 ->
+                        let overlap = Env.filter (fun k _ -> Env.mem k env1) env2 in
+                        if not (Env.is_empty overlap) then
+                          let x, _ = Env.choose overlap in Error (bound_several_times p.pos x)
+                        else Ok (Env.union (fun _ _ v2 -> Some v2) env1 env2)
+                    | Error err, _ | _, Error err -> Error err)
+                 else Error (exp_pat p.pos TInt_list t)
+
+        | PTuple ps ->
+            (match t with
+            | TTuple ts when List.length ps = List.length ts ->
+                let rec check_tuple_cases ps ts =
+                  match ps, ts with
+                  | [], [] -> Ok Env.empty
+                  | p_i :: ps_rest, t_i :: ts_rest ->
+                      (match check_pat p_i t_i with
+                        | Ok env_p ->
+                            (match check_tuple_cases ps_rest ts_rest with
+                            | Ok env_rest ->
+                                let overlap = Env.filter (fun k _ -> Env.mem k env_p) env_rest in
+                                if not (Env.is_empty overlap) then
+                                  let x, _ = Env.choose overlap in Error (bound_several_times p.pos x)
+                                else Ok (Env.union (fun _ _ v2 -> Some v2) env_p env_rest)
+                            | Error err -> Error err)
+                        | Error err -> Error err)
+                  | _, _ -> assert false
+                in check_tuple_cases ps ts
+            | _ -> Error (exp_tuple_pat p.pos t))
+      in
+      let rec check_branches remaining_cases expected_ty =
+        match remaining_cases with
+        | [] -> Ok expected_ty
+        | (p, branch_e) :: rest ->
+            (match check_pat p t1 with
+            | Ok new_env ->
+                let merged_ctxt = Env.union (fun _ _ v2 -> Some v2) ctxt new_env in
+                (match type_of_expr merged_ctxt branch_e with
+                  | Ok branch_ty ->
+                      if expected_ty = branch_ty then check_branches rest expected_ty
+                      else Error (exp_ty branch_e.pos branch_ty expected_ty)
+                  | Error err -> Error err)
+            | Error err -> Error err)
+      in 
+      (match cases with
+      | [] -> assert false
+      | (p, branch_e) :: rest ->
+          (match check_pat p t1 with
+            | Ok new_env ->
+                let merged_ctxt = Env.union (fun _ _ v2 -> Some v2) ctxt new_env in
+                (match type_of_expr merged_ctxt branch_e with
+                | Ok branch_ty -> check_branches rest branch_ty
+                | Error err -> Error err)
+            | Error err -> Error err))
+  | Error err -> Error err)
 
 
 let type_of (p : prog) : (ty, Error_msg.t) result =
@@ -290,20 +378,24 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
   | Bool b -> VBool b
   | Int n -> VInt n
   | Var x -> Env.find x env
+
   | Negate e1 -> 
     (match eval_expr env e1 with
       | VInt n -> VInt (-n)
       | _ -> assert false)
+
   | Assert e1 ->
     (match eval_expr env e1 with
     | VBool true -> VUnit
     | VBool false -> raise (Assert_fail e.pos)
     | _ -> assert false)
+
   | If (e1, e2, e3) ->
     (match eval_expr env e1 with
     | VBool true -> eval_expr env e2
     | VBool false -> eval_expr env e3
     | _ -> assert false)
+
   | Bop (op, e1, e2) ->
     (match op with
     | And->
@@ -335,6 +427,7 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
     | Gte, _, _  -> VBool (v1 >= v2 )
     | _ -> assert false)
     )
+
   | Let {is_rec; name; args; binding; body; _ } ->
     let v =
         if args <> [] then 
@@ -344,8 +437,10 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
           | other_val -> other_val
       in 
       eval_expr (Env.add name v env) body
+
   | Fun (args, body) ->
       VClos {env=env; name=None; args=List.map fst args; body}
+
   | App (e1, args) ->
     let rec apply current_val arg_vals =
         match current_val, arg_vals with
@@ -361,7 +456,47 @@ let rec eval_expr (env : dyn_env) (e : expr) : value =
         | _ -> assert false
       in 
       apply (eval_expr env e1) (List.map (eval_expr env) args)
-  | _ -> assert false
+
+  | Nil -> VInt_list []
+  | Tuple es ->
+    let vs = List.map (eval_expr env) es in
+    VTuple vs
+
+  | Match (e1, cases) ->
+    let v0 = eval_expr env e1 in
+    let rec match_cases p v =
+      match p.pattern, v with 
+      | PUnit, VUnit -> Some Env.empty
+      | PBool b, VBool v when b = v -> Some Env.empty
+      | PInt n, VInt m when n = m -> Some Env.empty
+      | PNil, VInt_list [] -> Some Env.empty
+      | PVar "_", _ -> Some Env.empty
+      | PVar x, matchval -> Some (Env.add x matchval Env.empty)
+
+      | PCons (p1, p2), VInt_list (v :: vs) ->
+        (match match_cases p1 (VInt v), match_cases p2 (VInt_list vs) with
+        | Some env1, Some env2 -> Some (Env.union (fun _ _ v2 -> Some v2) env1 env2)
+        | _ -> None)
+
+      | PTuple ps, VTuple vs when List.length ps = List.length vs ->
+        List.fold_left2 (fun acc p v ->
+          match acc with
+          | Some env ->
+            (match match_cases p v with
+            | Some env' -> Some (Env.union (fun _ _ v2 -> Some v2) env env')
+            | None -> None)
+          | None -> None
+        ) (Some Env.empty) ps vs
+      | _ -> None
+    in
+    let rec try_cases cases =
+      match cases with
+      | [] -> raise (Match_fail e.pos)
+      | (p, e) :: rest_cases ->
+        (match match_cases p v0 with
+        | Some new_env -> eval_expr (Env.union (fun _ _ v2 -> Some v2) env new_env) e
+        | None -> try_cases rest_cases)
+    in try_cases cases
 
 
 let eval (p : prog) : value =
